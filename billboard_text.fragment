@@ -1,0 +1,173 @@
+// __multiversion__
+// This signals the loading code to prepend either #version 100 or #version 300 es as apropriate.
+
+// To use centroid sampling we need to have version 300 es shaders, which requires changing:
+// attribute to in
+// varying to out when in vertex shaders or in when in fragment shaders
+// defining an out vec4 FragColor and replacing uses of gl_FragColor with FragColor
+// texture2D to texture
+#if __VERSION__ >= 300
+
+#ifdef MSAA_FRAMEBUFFER_ENABLED
+#define _centroid centroid
+#else
+#define _centroid
+#endif
+
+// version 300 code
+_centroid in vec2 uv;
+
+#define varying in
+#define texture2D texture
+out vec4 FragColor;
+#define gl_FragColor FragColor
+
+#else
+
+// version 100 code
+varying vec2 uv;
+
+#endif
+
+
+#ifndef _UNIFORM_SHADER_CONSTANTS_H
+#define _UNIFORM_SHADER_CONSTANTS_H
+
+#ifndef _UNIFORM_MACRO_H
+#define _UNIFORM_MACRO_H
+
+#ifdef MCPE_PLATFORM_NX
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) uniform x {
+#define END_UNIFORM_BLOCK };
+#define UNIFORM 
+#else
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) 
+#define END_UNIFORM_BLOCK
+#define UNIFORM uniform 
+#endif
+
+#if __VERSION__ >= 420
+#define LAYOUT_BINDING(x) layout(binding = x)
+#else
+#define LAYOUT_BINDING(x) 
+#endif
+
+#endif
+
+
+#ifdef MCPE_PLATFORM_NX
+#extension GL_ARB_enhanced_layouts : enable
+layout(binding = 3) uniform ShaderConstants {
+#endif
+// BEGIN_UNIFORM_BLOCK(ShaderConstants) - unfortunately this macro does not work on old Amazon platforms so using above 3 lines instead
+UNIFORM vec4 CURRENT_COLOR;
+UNIFORM vec4 DARKEN;
+UNIFORM vec3 TEXTURE_DIMENSIONS;
+UNIFORM float HUD_OPACITY;
+UNIFORM MAT4 UV_TRANSFORM;
+END_UNIFORM_BLOCK
+
+#endif
+
+
+#ifndef _UNIFORM_MACRO_H
+#define _UNIFORM_MACRO_H
+
+#ifdef MCPE_PLATFORM_NX
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) uniform x {
+#define END_UNIFORM_BLOCK };
+#define UNIFORM 
+#else
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) 
+#define END_UNIFORM_BLOCK
+#define UNIFORM uniform 
+#endif
+
+#if __VERSION__ >= 420
+#define LAYOUT_BINDING(x) layout(binding = x)
+#else
+#define LAYOUT_BINDING(x) 
+#endif
+
+#endif
+
+
+UNIFORM int IS_ICON_FONT;
+
+LAYOUT_BINDING(0) uniform sampler2D TEXTURE_0;
+
+varying vec4 color;
+
+float median(float a, float b, float c) {
+	return max(min(a, b), min(max(a, b), c));
+}
+
+#ifndef _UNIFORM_TEXT_CONSTANTS_H
+#define _UNIFORM_TEXT_CONSTANTS_H
+
+#ifndef _UNIFORM_MACRO_H
+#define _UNIFORM_MACRO_H
+
+#ifdef MCPE_PLATFORM_NX
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) uniform x {
+#define END_UNIFORM_BLOCK };
+#define UNIFORM 
+#else
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) 
+#define END_UNIFORM_BLOCK
+#define UNIFORM uniform 
+#endif
+
+#if __VERSION__ >= 420
+#define LAYOUT_BINDING(x) layout(binding = x)
+#else
+#define LAYOUT_BINDING(x) 
+#endif
+
+#endif
+
+
+#ifdef MCPE_PLATFORM_NX
+uniform TextConstants {
+#endif
+// BEGIN_UNIFORM_BLOCK(TextConstants) - unfortunately this macro does not work on old Amazon platforms so using above 3 lines instead
+UNIFORM float GLYPH_SMOOTH_RADIUS;
+UNIFORM float OUTLINE_CUTOFF;
+UNIFORM float SHADOW_SMOOTH_RADIUS;
+UNIFORM vec4 SHADOW_COLOR;
+UNIFORM vec2 SHADOW_OFFSET;
+END_UNIFORM_BLOCK
+
+#endif
+
+
+const float GLYPH_UV_SIZE = 1.0 / 16.0;
+const float ALPHA_THRESHOLD = 0.4;
+
+void main()
+{
+	vec4 diffuse = texture2D( TEXTURE_0,  uv );
+
+#ifdef SMOOTH
+	const float center = 0.4;
+	const float radius = 0.1;
+
+	diffuse = smoothstep(center - radius, center + radius, diffuse);
+#endif
+
+#ifdef ALPHA_TEST
+	if(diffuse.a < 0.5) {
+		discard;
+	}
+#endif
+
+	vec4 resultColor;
+	if(IS_ICON_FONT > 0) {
+		resultColor = diffuse * color;
+	}
+	else {
+		resultColor = vec4(diffuse.rrr * DARKEN.rgb * color.rgb, smoothstep(ALPHA_THRESHOLD, 1.0, diffuse.r) * color.a * DARKEN.a);
+	}
+	gl_FragColor = resultColor;
+
+}

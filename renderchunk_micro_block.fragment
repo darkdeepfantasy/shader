@@ -1,0 +1,187 @@
+// __multiversion__
+// This signals the loading code to prepend either #version 100 or #version 300 es as apropriate.
+
+// To use centroid sampling we need to have version 300 es shaders, which requires changing:
+// attribute to in
+// varying to out when in vertex shaders or in when in fragment shaders
+// defining an out vec4 FragColor and replacing uses of gl_FragColor with FragColor
+// texture2D to texture
+#if __VERSION__ >= 300
+
+#ifdef MSAA_FRAMEBUFFER_ENABLED
+#define _centroid centroid
+#else
+#define _centroid
+#endif
+
+#define varying in
+#define texture2D texture
+out vec4 FragColor;
+#define gl_FragColor FragColor
+
+#endif
+
+
+#if __VERSION__ >= 300
+	#ifndef BYPASS_PIXEL_SHADER
+		#if defined(TEXEL_AA) && defined(TEXEL_AA_FEATURE)
+			_centroid in highp vec2 uv0;
+			_centroid in highp vec2 uv1;
+		#else
+			_centroid in vec2 uv0;
+			_centroid in vec2 uv1;
+		#endif
+	#endif
+#else
+	#ifndef BYPASS_PIXEL_SHADER
+		varying vec2 uv0;
+		varying vec2 uv1;
+	#endif
+#endif
+
+varying vec4 color;
+
+#ifdef FOG
+varying vec4 fogColor;
+#endif
+
+#ifndef _UNIFORM_SHADER_CONSTANTS_H
+#define _UNIFORM_SHADER_CONSTANTS_H
+
+#ifndef _UNIFORM_MACRO_H
+#define _UNIFORM_MACRO_H
+
+#ifdef MCPE_PLATFORM_NX
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) uniform x {
+#define END_UNIFORM_BLOCK };
+#define UNIFORM 
+#else
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) 
+#define END_UNIFORM_BLOCK
+#define UNIFORM uniform 
+#endif
+
+#if __VERSION__ >= 420
+#define LAYOUT_BINDING(x) layout(binding = x)
+#else
+#define LAYOUT_BINDING(x) 
+#endif
+
+#endif
+
+
+#ifdef MCPE_PLATFORM_NX
+#extension GL_ARB_enhanced_layouts : enable
+layout(binding = 3) uniform ShaderConstants {
+#endif
+// BEGIN_UNIFORM_BLOCK(ShaderConstants) - unfortunately this macro does not work on old Amazon platforms so using above 3 lines instead
+UNIFORM vec4 CURRENT_COLOR;
+UNIFORM vec4 DARKEN;
+UNIFORM vec3 TEXTURE_DIMENSIONS;
+UNIFORM float HUD_OPACITY;
+UNIFORM MAT4 UV_TRANSFORM;
+END_UNIFORM_BLOCK
+
+#endif
+
+#if !defined(TEXEL_AA) || !defined(TEXEL_AA_FEATURE)
+#define USE_TEXEL_AA 0
+#else
+#define USE_TEXEL_AA 1
+#endif
+
+#ifdef ALPHA_TEST
+#define USE_ALPHA_TEST 1
+#else
+#define USE_ALPHA_TEST 0
+#endif
+
+#if __VERSION__ >= 300
+
+#ifndef _UNIFORM_SHADER_CONSTANTS_H
+#define _UNIFORM_SHADER_CONSTANTS_H
+
+#ifndef _UNIFORM_MACRO_H
+#define _UNIFORM_MACRO_H
+
+#ifdef MCPE_PLATFORM_NX
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) uniform x {
+#define END_UNIFORM_BLOCK };
+#define UNIFORM 
+#else
+// Unfortunately this macro does not work on old Amazon platforms #define BEGIN_UNIFORM_BLOCK(x) 
+#define END_UNIFORM_BLOCK
+#define UNIFORM uniform 
+#endif
+
+#if __VERSION__ >= 420
+#define LAYOUT_BINDING(x) layout(binding = x)
+#else
+#define LAYOUT_BINDING(x) 
+#endif
+
+#endif
+
+
+#ifdef MCPE_PLATFORM_NX
+#extension GL_ARB_enhanced_layouts : enable
+layout(binding = 3) uniform ShaderConstants {
+#endif
+// BEGIN_UNIFORM_BLOCK(ShaderConstants) - unfortunately this macro does not work on old Amazon platforms so using above 3 lines instead
+UNIFORM vec4 CURRENT_COLOR;
+UNIFORM vec4 DARKEN;
+UNIFORM vec3 TEXTURE_DIMENSIONS;
+UNIFORM float HUD_OPACITY;
+UNIFORM MAT4 UV_TRANSFORM;
+END_UNIFORM_BLOCK
+
+#endif
+
+
+#if USE_TEXEL_AA
+
+const float TEXEL_AA_LOD_CONSERVATIVE = -1.0;
+const float TEXEL_AA_LOD_RELAXED = 2.0;
+
+vec4 texture2D_AA(in sampler2D source, in highp vec2 originalUV) {
+
+	highp vec2 dUV_dX = dFdx(originalUV) * TEXTURE_DIMENSIONS.xy;
+	highp vec2 dUV_dY = dFdy(originalUV) * TEXTURE_DIMENSIONS.xy;
+
+	highp vec2 delU = vec2(dUV_dX.x, dUV_dY.x);
+	highp vec2 delV = vec2(dUV_dX.y, dUV_dY.y);
+	highp vec2 adjustmentScalar = max(1.0 / vec2(length(delU), length(delV)), 1.0);
+
+	highp vec2 fractionalTexel = fract(originalUV * TEXTURE_DIMENSIONS.xy);
+	highp vec2 adjustedFractionalTexel = clamp(fractionalTexel * adjustmentScalar, 0.0, 0.5) + clamp(fractionalTexel * adjustmentScalar - (adjustmentScalar - 0.5), 0.0, 0.5);
+
+	highp float lod = log2(sqrt(max(dot(dUV_dX, dUV_dX), dot(dUV_dY, dUV_dY))) * 2.0);
+	highp float samplingMode = smoothstep(TEXEL_AA_LOD_RELAXED, TEXEL_AA_LOD_CONSERVATIVE, lod);
+
+	highp vec2 adjustedUV = (adjustedFractionalTexel + floor(originalUV * TEXTURE_DIMENSIONS.xy)) / TEXTURE_DIMENSIONS.xy;
+	lowp vec4 blendedSample = texture2D(source, mix(originalUV, adjustedUV, samplingMode));
+
+	#if USE_ALPHA_TEST
+		return vec4(blendedSample.rgb, mix(blendedSample.a, smoothstep(1.0/2.0, 1.0, blendedSample.a), samplingMode));
+	#else
+		return blendedSample;
+	#endif
+}
+
+#endif // USE_TEXEL_AA
+
+#endif //__VERSION__ >= 300
+
+
+LAYOUT_BINDING(0) uniform sampler2D TEXTURE_0;
+LAYOUT_BINDING(1) uniform sampler2D TEXTURE_1;
+LAYOUT_BINDING(2) uniform sampler2D TEXTURE_2;
+
+void main()
+{
+	// no TEXTURE_0
+	vec4 diffuse = texture2D(TEXTURE_1, uv1);
+	vec4 inColor = color;
+	diffuse.rgb *= inColor.rgb;
+	gl_FragColor = diffuse;
+}
